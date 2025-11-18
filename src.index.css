@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Estilos globais extras se precisar */
+body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
