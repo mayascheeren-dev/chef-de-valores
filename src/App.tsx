@@ -186,8 +186,9 @@ const App = () => {
     const apiKey = ""; // Chave injetada pelo ambiente
     const model = "gemini-2.5-flash-preview-09-2025";
     
-    // CORREÇÃO: Usamos um acesso mais robusto para evitar o warning de build, priorizando a variável de ambiente se ela existir.
-    const envApiKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) || apiKey;
+    // CORREÇÃO FINAL: Esta é a forma mais robusta de acessar a variável de ambiente (Vercel)
+    // Usamos 'VITE_GEMINI_API_KEY' (Vite) ou 'GEMINI_API_KEY' (Vercel Node)
+    const envApiKey = (process.env.VITE_GEMINI_API_KEY as string) || (process.env.GEMINI_API_KEY as string) || apiKey; 
     
     const ingredientsList = recipe.selectedIngredients
       .map((item: any) => ingredients.find(i => i.id === item.id)?.name)
