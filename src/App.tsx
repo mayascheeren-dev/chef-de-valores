@@ -29,35 +29,43 @@ const defaultRecipe = {
   ]
 };
 
+// Interface para garantir tipagem correta dos objetos de receita
+interface RecipeData {
+  name: string;
+  yields: number;
+  timeSpentMinutes: number;
+  profitMargin: number;
+  selectedIngredients: Array<{ id: number, quantity: number }>;
+}
+
 const App = () => {
   // Estado de Login
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [inputPassword, setInputPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [inputPassword, setInputPassword] = useState<string>('');
+  const [loginError, setLoginError] = useState<string>('');
 
-  const [activeTab, setActiveTab] = useState('calculator');
+  const [activeTab, setActiveTab] = useState<string>('calculator');
   
   // Estado do Negócio (Configurações)
-  const [businessConfig, setBusinessConfig] = useState(() => {
-    // Usamos um nome de chave neutro para garantir que a persistência funcione
+  const [businessConfig, setBusinessConfig] = useState<any>(() => {
     const savedConfig = localStorage.getItem('chefdevalor_config');
     return savedConfig ? JSON.parse(savedConfig) : { salary: 3000, fixedCosts: 800, hoursPerDay: 8, daysPerWeek: 5 };
   });
 
   // Estado dos Ingredientes (DB)
-  const [ingredients, setIngredients] = useState(() => {
+  const [ingredients, setIngredients] = useState<any>(() => {
     const savedIngredients = localStorage.getItem('chefdevalor_ingredients');
     return savedIngredients ? JSON.parse(savedIngredients) : initialIngredients;
   });
 
   // Estado das Receitas Salvas
-  const [savedRecipes, setSavedRecipes] = useState(() => {
+  const [savedRecipes, setSavedRecipes] = useState<any>(() => {
     const saved = localStorage.getItem('chefdevalor_saved_recipes');
     return saved ? JSON.parse(saved) : [];
   });
   
   // Estado da Receita Atual
-  const [recipe, setRecipe] = useState(defaultRecipe);
+  const [recipe, setRecipe] = useState<RecipeData>(defaultRecipe);
 
   // Efeitos de persistência
   useEffect(() => {
@@ -75,7 +83,6 @@ const App = () => {
 
   // Verificar se já estava logado (salvo no navegador)
   useEffect(() => {
-    // Usamos a chave antiga 'doceLucroAuth' por compatibilidade em navegadores que já a salvaram
     const savedAuth = localStorage.getItem('doceLucroAuth');
     if (savedAuth === 'true') {
       setIsAuthenticated(true);
@@ -130,39 +137,37 @@ const App = () => {
   };
 
   const handleDeleteRecipe = (recipeId: number, recipeName: string) => {
-    // Substituído window.confirm por um modal simples de alert/confirm.
     if (window.confirm(`Tem certeza que deseja deletar a receita: "${recipeName}"?`)) {
       setSavedRecipes(savedRecipes.filter((r: any) => r.id !== recipeId));
     }
   };
   
   // --- CÁLCULOS MATEMÁTICOS ---
-  const calculateHourlyRate = () => {
-    const weeksPerMonth = 4.28;
-    // Conversão explícita para number
-    const totalHoursMonth = parseFloat(businessConfig.hoursPerDay as any) * parseFloat(businessConfig.daysPerWeek as any) * weeksPerMonth;
-    const totalCost = parseFloat(businessConfig.salary as any) + parseFloat(businessConfig.fixedCosts as any);
+  const calculateHourlyRate = (): number => {
+    const weeksPerMonth: number = 4.28;
+    const totalHoursMonth: number = parseFloat(businessConfig.hoursPerDay as any) * parseFloat(businessConfig.daysPerWeek as any) * weeksPerMonth;
+    const totalCost: number = parseFloat(businessConfig.salary as any) + parseFloat(businessConfig.fixedCosts as any);
     return totalHoursMonth > 0 ? totalCost / totalHoursMonth : 0;
   };
 
-  const hourlyRate = calculateHourlyRate();
+  const hourlyRate: number = calculateHourlyRate();
 
   const calculateRecipeCosts = () => {
-    let totalIngredientsCost = 0;
+    let totalIngredientsCost: number = 0;
     recipe.selectedIngredients.forEach((item: any) => {
-      const ingredient = ingredients.find(i => i.id === item.id);
+      const ingredient = ingredients.find((i: any) => i.id === item.id);
       if (ingredient) {
-        const costPerGram = ingredient.cost / ingredient.packageWeight;
+        const costPerGram: number = ingredient.cost / ingredient.packageWeight;
         totalIngredientsCost += costPerGram * item.quantity;
       }
     });
 
-    const variableCosts = totalIngredientsCost * 0.10;
-    const laborCost = (recipe.timeSpentMinutes / 60) * hourlyRate;
-    const totalProductionCost = totalIngredientsCost + variableCosts + laborCost;
-    const profitValue = totalProductionCost * (recipe.profitMargin / 100);
-    const totalSalePrice = totalProductionCost + profitValue;
-    const pricePerUnit = recipe.yields > 0 ? totalSalePrice / recipe.yields : 0;
+    const variableCosts: number = totalIngredientsCost * 0.10;
+    const laborCost: number = (recipe.timeSpentMinutes / 60) * hourlyRate;
+    const totalProductionCost: number = totalIngredientsCost + variableCosts + laborCost;
+    const profitValue: number = totalProductionCost * (recipe.profitMargin / 100);
+    const totalSalePrice: number = totalProductionCost + profitValue;
+    const pricePerUnit: number = recipe.yields > 0 ? totalSalePrice / recipe.yields : 0;
 
     return {
       totalIngredientsCost,
@@ -178,7 +183,7 @@ const App = () => {
   const results = calculateRecipeCosts();
 
   // --- FUNÇÕES DE UTILIDADE ---
-  const formatMoney = (value: number) => {
+  const formatMoney = (value: number): string => {
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
@@ -188,9 +193,9 @@ const App = () => {
       setIngredients([...ingredients, { 
         ...newIngredient, 
         id: Date.now(), 
-        packageWeight: parseFloat(newIngredient.packageWeight as any), 
-        cost: parseFloat(newIngredient.cost as any) 
-      }]); // Corrigido: fechando com ']'
+        packageWeight: parseFloat(newIngredient.packageWeight as string), 
+        cost: parseFloat(newIngredient.cost as string) 
+      }]);
       setNewIngredient({ name: '', packageWeight: '', cost: '' });
     }
   };
@@ -210,13 +215,13 @@ const App = () => {
     const updated = recipe.selectedIngredients.map((item: any) => 
       item.id === id ? { ...item, quantity: parseFloat(quantity) || 0 } : item
     );
-    setRecipe({ ...recipe, selectedIngredients: updated });
+    setRecipe({ ...recipe, selectedIngredients: updated as any });
   };
 
   const removeIngredientFromRecipe = (id: number) => {
     setRecipe({
       ...recipe,
-      selectedIngredients: recipe.selectedIngredients.filter((item: any) => item.id !== id)
+      selectedIngredients: recipe.selectedIngredients.filter((item: any) => item.id !== id) as any
     });
   };
 
@@ -342,7 +347,6 @@ const App = () => {
             { id: 'ingredients', label: 'Despensa', icon: Package, color: 'text-orange-600' },
             { id: 'calculator', label: 'Calculadora', icon: Calculator, color: 'text-[#BF360C]' },
             { id: 'savedRecipes', label: 'Receitas Salvas', icon: List, color: 'text-green-600' },
-            // Removida aba 'marketing'
           ].map((tab) => (
             <button
               key={tab.id}
@@ -487,7 +491,7 @@ const App = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {ingredients.map(ing => (
+                {ingredients.map((ing: any) => (
                   <div key={ing.id} className="group bg-white border border-[#FFE0B2] rounded-2xl p-4 flex justify-between items-center hover:shadow-lg hover:border-[#FFCC80] transition-all">
                     <div>
                       <h4 className="font-bold text-[#5D4037]">{ing.name}</h4>
@@ -500,7 +504,7 @@ const App = () => {
                         {formatMoney(ing.cost / ing.packageWeight)}/g
                       </span>
                       <button 
-                        onClick={() => setIngredients(ingredients.filter(i => i.id !== ing.id))}
+                        onClick={() => setIngredients(ingredients.filter((i: any) => i.id !== ing.id))}
                         className="text-[#D7CCC8] hover:text-red-400 transition-colors p-1"
                       >
                         <Trash2 size={14} />
@@ -579,7 +583,7 @@ const App = () => {
                         className="appearance-none bg-[#FFF8E1] hover:bg-[#FFE0B2] text-[#5D4037] pl-4 pr-8 py-2 rounded-full text-sm font-bold cursor-pointer transition-colors outline-none border border-[#FFE0B2]"
                       >
                         <option value="" disabled>+ Adicionar Item</option>
-                        {ingredients.map(ing => (
+                        {ingredients.map((ing: any) => (
                           <option key={ing.id} value={ing.id}>{ing.name}</option>
                         ))}
                       </select>
@@ -591,7 +595,7 @@ const App = () => {
 
                   <div className="space-y-3">
                     {recipe.selectedIngredients.map((item: any) => {
-                      const ingredient = ingredients.find(i => i.id === item.id);
+                      const ingredient = ingredients.find((i: any) => i.id === item.id);
                       if (!ingredient) return null;
                       const itemCost = (ingredient.cost / ingredient.packageWeight) * item.quantity;
                       
@@ -774,4 +778,3 @@ const App = () => {
 };
 
 export default App;
-                    
