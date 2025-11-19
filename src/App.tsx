@@ -12,6 +12,22 @@ interface Ingredient {
   cost: number;
 }
 
+// Interface para o novo ingrediente (inputs)
+interface NewIngredientInput {
+  name: string;
+  packageWeight: string;
+  cost: string;
+}
+
+// Interface para o estado da receita
+interface RecipeData {
+  name: string;
+  yields: number;
+  timeSpentMinutes: number;
+  profitMargin: number;
+  selectedIngredients: Array<{ id: number, quantity: number }>;
+}
+
 // Dados iniciais baseados na planilha (Tipagem correta aplicada aqui)
 const initialIngredients: Ingredient[] = [
   { id: 1, name: 'Leite Condensado', packageWeight: 395, cost: 5.50 },
@@ -22,15 +38,6 @@ const initialIngredients: Ingredient[] = [
   { id: 6, name: 'Ovos (unidade)', packageWeight: 1, cost: 0.80 },
   { id: 7, name: 'Embalagem Unitária', packageWeight: 1, cost: 1.50 },
 ];
-
-// Interface para garantir tipagem correta dos objetos de receita
-interface RecipeData {
-  name: string;
-  yields: number;
-  timeSpentMinutes: number;
-  profitMargin: number;
-  selectedIngredients: Array<{ id: number, quantity: number }>;
-}
 
 // Receita inicial padrão
 const defaultRecipe: RecipeData = {
@@ -65,6 +72,9 @@ const App: React.FC = () => {
     const savedIngredients = localStorage.getItem('chefdevalor_ingredients');
     return savedIngredients ? JSON.parse(savedIngredients) : initialIngredients;
   });
+
+  // Estado para o input de novo ingrediente
+  const [newIngredient, setNewIngredient] = useState<NewIngredientInput>({ name: '', packageWeight: '', cost: '' });
 
   // Estado das Receitas Salvas
   const [savedRecipes, setSavedRecipes] = useState<any[]>(() => {
@@ -202,9 +212,9 @@ const App: React.FC = () => {
       setIngredients([...ingredients, { 
         ...newIngredient, 
         id: Date.now(), 
-        packageWeight: parseFloat(newIngredient.packageWeight as string), 
-        cost: parseFloat(newIngredient.cost as string) 
-      }]); 
+        packageWeight: parseFloat(newIngredient.packageWeight), 
+        cost: parseFloat(newIngredient.cost) 
+      } as Ingredient]); 
       setNewIngredient({ name: '', packageWeight: '', cost: '' });
     }
   };
@@ -396,7 +406,7 @@ const App: React.FC = () => {
                     <input 
                       type="number" 
                       value={businessConfig.salary}
-                      onChange={(e) => setBusinessConfig({...businessConfig, salary: e.target.value as any})}
+                      onChange={(e) => setBusinessConfig({...businessConfig, salary: e.target.value})}
                       className="candy-input w-full pl-12 p-3 text-lg font-bold"
                     />
                   </div>
@@ -409,7 +419,7 @@ const App: React.FC = () => {
                     <input 
                       type="number" 
                       value={businessConfig.fixedCosts}
-                      onChange={(e) => setBusinessConfig({...businessConfig, fixedCosts: e.target.value as any})}
+                      onChange={(e) => setBusinessConfig({...businessConfig, fixedCosts: e.target.value})}
                       className="candy-input w-full pl-12 p-3 text-lg font-bold"
                     />
                   </div>
@@ -426,7 +436,7 @@ const App: React.FC = () => {
                       <input 
                         type="number" 
                         value={businessConfig.hoursPerDay}
-                        onChange={(e) => setBusinessConfig({...businessConfig, hoursPerDay: e.target.value as any})}
+                        onChange={(e) => setBusinessConfig({...businessConfig, hoursPerDay: e.target.value})}
                         className="candy-input w-full p-3 text-center text-xl font-bold text-[#BF360C] border-[#FFCC80] focus:border-[#E65100] bg-white"
                       />
                     </div>
@@ -435,7 +445,7 @@ const App: React.FC = () => {
                       <input 
                         type="number" 
                         value={businessConfig.daysPerWeek}
-                        onChange={(e) => setBusinessConfig({...businessConfig, daysPerWeek: e.target.value as any})}
+                        onChange={(e) => setBusinessConfig({...businessConfig, daysPerWeek: e.target.value})}
                         className="candy-input w-full p-3 text-center text-xl font-bold text-[#BF360C] border-[#FFCC80] focus:border-[#E65100] bg-white"
                       />
                     </div>
@@ -477,7 +487,7 @@ const App: React.FC = () => {
                     type="number" 
                     placeholder="400"
                     value={newIngredient.packageWeight}
-                    onChange={(e) => setNewIngredient({...newIngredient, packageWeight: e.target.value as any})}
+                    onChange={(e) => setNewIngredient({...newIngredient, packageWeight: e.target.value})}
                     className="candy-input w-full p-3"
                   />
                 </div>
@@ -487,7 +497,7 @@ const App: React.FC = () => {
                     type="number" 
                     placeholder="0.00"
                     value={newIngredient.cost}
-                    onChange={(e) => setNewIngredient({...newIngredient, cost: e.target.value as any})}
+                    onChange={(e) => setNewIngredient({...newIngredient, cost: e.target.value})}
                     className="candy-input w-full p-3"
                   />
                 </div>
