@@ -2,10 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { Calculator, Settings, Plus, Trash2, Package, Clock, ChefHat, List, TrendingUp, Lock, Save } from 'lucide-react';
 
 // --- CONFIGURAÇÃO DE SEGURANÇA ---
-const ACCESS_PASSWORD = "DOCE2025"; 
+const ACCESS_PASSWORD: string = "DOCE2025"; 
 
-// Dados iniciais baseados na planilha
-const initialIngredients = [
+// Interface para garantir a tipagem correta dos ingredientes
+interface Ingredient {
+  id: number;
+  name: string;
+  packageWeight: number;
+  cost: number;
+}
+
+// Dados iniciais baseados na planilha (Tipagem correta aplicada aqui)
+const initialIngredients: Ingredient[] = [
   { id: 1, name: 'Leite Condensado', packageWeight: 395, cost: 5.50 },
   { id: 2, name: 'Creme de Leite', packageWeight: 200, cost: 3.20 },
   { id: 3, name: 'Chocolate em Pó 50%', packageWeight: 1000, cost: 35.00 },
@@ -15,8 +23,17 @@ const initialIngredients = [
   { id: 7, name: 'Embalagem Unitária', packageWeight: 1, cost: 1.50 },
 ];
 
+// Interface para garantir tipagem correta dos objetos de receita
+interface RecipeData {
+  name: string;
+  yields: number;
+  timeSpentMinutes: number;
+  profitMargin: number;
+  selectedIngredients: Array<{ id: number, quantity: number }>;
+}
+
 // Receita inicial padrão
-const defaultRecipe = {
+const defaultRecipe: RecipeData = {
   name: 'Brigadeiro Gourmet (Padrão)',
   yields: 20,
   timeSpentMinutes: 60,
@@ -29,16 +46,7 @@ const defaultRecipe = {
   ]
 };
 
-// Interface para garantir tipagem correta dos objetos de receita
-interface RecipeData {
-  name: string;
-  yields: number;
-  timeSpentMinutes: number;
-  profitMargin: number;
-  selectedIngredients: Array<{ id: number, quantity: number }>;
-}
-
-const App = () => {
+const App: React.FC = () => {
   // Estado de Login
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [inputPassword, setInputPassword] = useState<string>('');
@@ -53,13 +61,13 @@ const App = () => {
   });
 
   // Estado dos Ingredientes (DB)
-  const [ingredients, setIngredients] = useState<any>(() => {
+  const [ingredients, setIngredients] = useState<Ingredient[]>(() => {
     const savedIngredients = localStorage.getItem('chefdevalor_ingredients');
     return savedIngredients ? JSON.parse(savedIngredients) : initialIngredients;
   });
 
   // Estado das Receitas Salvas
-  const [savedRecipes, setSavedRecipes] = useState<any>(() => {
+  const [savedRecipes, setSavedRecipes] = useState<any[]>(() => {
     const saved = localStorage.getItem('chefdevalor_saved_recipes');
     return saved ? JSON.parse(saved) : [];
   });
@@ -117,7 +125,7 @@ const App = () => {
       ...recipe,
       id: Date.now(),
       savedAt: new Date().toLocaleString('pt-BR'),
-      hourlyRate: hourlyRate.toFixed(2), // Salva a taxa horária para contexto
+      hourlyRate: calculateHourlyRate().toFixed(2), // Salva a taxa horária para contexto
     };
     setSavedRecipes([...savedRecipes, recipeToSave]);
     alert(`Receita "${recipe.name}" salva com sucesso!`);
@@ -130,7 +138,7 @@ const App = () => {
       setRecipe({
         ...recipeToLoad,
         profitMargin: recipeToLoad.profitMargin || 30, // Garante valor padrão se faltar
-      });
+      } as RecipeData);
       alert(`Receita "${recipeToLoad.name}" carregada!`);
       setActiveTab('calculator');
     }
@@ -145,8 +153,9 @@ const App = () => {
   // --- CÁLCULOS MATEMÁTICOS ---
   const calculateHourlyRate = (): number => {
     const weeksPerMonth: number = 4.28;
-    const totalHoursMonth: number = parseFloat(businessConfig.hoursPerDay as any) * parseFloat(businessConfig.daysPerWeek as any) * weeksPerMonth;
-    const totalCost: number = parseFloat(businessConfig.salary as any) + parseFloat(businessConfig.fixedCosts as any);
+    // Conversão explícita para number
+    const totalHoursMonth: number = parseFloat(businessConfig.hoursPerDay as string) * parseFloat(businessConfig.daysPerWeek as string) * weeksPerMonth;
+    const totalCost: number = parseFloat(businessConfig.salary as string) + parseFloat(businessConfig.fixedCosts as string);
     return totalHoursMonth > 0 ? totalCost / totalHoursMonth : 0;
   };
 
@@ -195,7 +204,7 @@ const App = () => {
         id: Date.now(), 
         packageWeight: parseFloat(newIngredient.packageWeight as string), 
         cost: parseFloat(newIngredient.cost as string) 
-      }]);
+      }]); 
       setNewIngredient({ name: '', packageWeight: '', cost: '' });
     }
   };
@@ -491,7 +500,7 @@ const App = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {ingredients.map((ing: any) => (
+                {ingredients.map((ing: Ingredient) => (
                   <div key={ing.id} className="group bg-white border border-[#FFE0B2] rounded-2xl p-4 flex justify-between items-center hover:shadow-lg hover:border-[#FFCC80] transition-all">
                     <div>
                       <h4 className="font-bold text-[#5D4037]">{ing.name}</h4>
@@ -583,7 +592,7 @@ const App = () => {
                         className="appearance-none bg-[#FFF8E1] hover:bg-[#FFE0B2] text-[#5D4037] pl-4 pr-8 py-2 rounded-full text-sm font-bold cursor-pointer transition-colors outline-none border border-[#FFE0B2]"
                       >
                         <option value="" disabled>+ Adicionar Item</option>
-                        {ingredients.map((ing: any) => (
+                        {ingredients.map((ing: Ingredient) => (
                           <option key={ing.id} value={ing.id}>{ing.name}</option>
                         ))}
                       </select>
@@ -770,8 +779,6 @@ const App = () => {
             
           </div>
         )}
-        
-        {/* OBS: A aba MARKETING FOI REMOVIDA */}
       </main>
     </div>
   );
