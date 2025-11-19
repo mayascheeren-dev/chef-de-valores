@@ -1,10 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Calculator, Settings, Plus, Trash2, Package, Clock, ChefHat, List, TrendingUp, Lock, Save } from 'lucide-react';
+import { initializeApp } from "firebase/app";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { Calculator, Settings, Plus, Trash2, Package, Clock, ChefHat, List, TrendingUp, Lock, Save, LogOut } from 'lucide-react';
 
-// --- CONFIGURAÇÃO DE SEGURANÇA ---
-const ACCESS_PASSWORD: string = "DOCE2025"; 
+// --- 🔒 CONFIGURAÇÃO DO SEU PORTEIRO (FIREBASE) ---
+// Seus dados reais configurados:
+const firebaseConfig = {
+  apiKey: "AIzaSyBvHMHh6jkinWx4K1bKii2eI4SoGkAyqFo",
+  authDomain: "chef-de-valor.firebaseapp.com",
+  projectId: "chef-de-valor",
+  storageBucket: "chef-de-valor.firebasestorage.app",
+  messagingSenderId: "401607199442",
+  appId: "1:401607199442:web:eed83f4608c5db05d5fb0b",
+  measurementId: "G-JR8Z43E95X"
+};
 
-// Interface para garantir a tipagem correta dos ingredientes
+// Inicializa a conexão com o Google (Firebase)
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+// --- TIPAGEM (Para evitar erros no CodeSandbox) ---
 interface Ingredient {
   id: number;
   name: string;
@@ -12,24 +27,8 @@ interface Ingredient {
   cost: number;
 }
 
-// Interface para o novo ingrediente (inputs)
-interface NewIngredientInput {
-  name: string;
-  packageWeight: string;
-  cost: string;
-}
-
-// Interface para o estado da receita
-interface RecipeData {
-  name: string;
-  yields: number;
-  timeSpentMinutes: number;
-  profitMargin: number;
-  selectedIngredients: Array<{ id: number, quantity: number }>;
-}
-
-// Dados iniciais baseados na planilha (Tipagem correta aplicada aqui)
-const initialIngredients: Ingredient[] = [
+// --- DADOS INICIAIS DO APP ---
+const initialIngredients = [
   { id: 1, name: 'Leite Condensado', packageWeight: 395, cost: 5.50 },
   { id: 2, name: 'Creme de Leite', packageWeight: 200, cost: 3.20 },
   { id: 3, name: 'Chocolate em Pó 50%', packageWeight: 1000, cost: 35.00 },
@@ -39,8 +38,7 @@ const initialIngredients: Ingredient[] = [
   { id: 7, name: 'Embalagem Unitária', packageWeight: 1, cost: 1.50 },
 ];
 
-// Receita inicial padrão
-const defaultRecipe: RecipeData = {
+const defaultRecipe = {
   name: 'Brigadeiro Gourmet (Padrão)',
   yields: 20,
   timeSpentMinutes: 60,
@@ -53,160 +51,110 @@ const defaultRecipe: RecipeData = {
   ]
 };
 
-const App: React.FC = () => {
-  // Estado de Login
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [inputPassword, setInputPassword] = useState<string>('');
-  const [loginError, setLoginError] = useState<string>('');
+const App = () => {
+  // Estados de Login e Usuário
+  const [user, setUser] = useState<any>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const [activeTab, setActiveTab] = useState<string>('calculator');
+  const [activeTab, setActiveTab] = useState('calculator');
   
-  // Estado do Negócio (Configurações)
-  const [businessConfig, setBusinessConfig] = useState<any>(() => {
-    const savedConfig = localStorage.getItem('chefdevalor_config');
-    return savedConfig ? JSON.parse(savedConfig) : { salary: 3000, fixedCosts: 800, hoursPerDay: 8, daysPerWeek: 5 };
+  // Configurações de Negócio
+  const [businessConfig, setBusinessConfig] = useState(() => {
+    const saved = localStorage.getItem('chefdevalor_config');
+    return saved ? JSON.parse(saved) : { salary: 3000, fixedCosts: 800, hoursPerDay: 8, daysPerWeek: 5 };
   });
 
-  // Estado dos Ingredientes (DB)
   const [ingredients, setIngredients] = useState<Ingredient[]>(() => {
-    const savedIngredients = localStorage.getItem('chefdevalor_ingredients');
-    return savedIngredients ? JSON.parse(savedIngredients) : initialIngredients;
+    const saved = localStorage.getItem('chefdevalor_ingredients');
+    return saved ? JSON.parse(saved) : initialIngredients;
   });
 
-  // Estado para o input de novo ingrediente
-  const [newIngredient, setNewIngredient] = useState<NewIngredientInput>({ name: '', packageWeight: '', cost: '' });
+  const [newIngredient, setNewIngredient] = useState({ name: '', packageWeight: '', cost: '' });
 
-  // Estado das Receitas Salvas
   const [savedRecipes, setSavedRecipes] = useState<any[]>(() => {
     const saved = localStorage.getItem('chefdevalor_saved_recipes');
     return saved ? JSON.parse(saved) : [];
   });
   
-  // Estado da Receita Atual
-  const [recipe, setRecipe] = useState<RecipeData>(defaultRecipe);
+  const [recipe, setRecipe] = useState<any>(defaultRecipe);
 
-  // Efeitos de persistência
+  // Salvar dados automaticamente no navegador
+  useEffect(() => { localStorage.setItem('chefdevalor_config', JSON.stringify(businessConfig)); }, [businessConfig]);
+  useEffect(() => { localStorage.setItem('chefdevalor_ingredients', JSON.stringify(ingredients)); }, [ingredients]);
+  useEffect(() => { localStorage.setItem('chefdevalor_saved_recipes', JSON.stringify(savedRecipes)); }, [savedRecipes]);
+
+  // Verificar se o usuário já está logado ao abrir o app
   useEffect(() => {
-    localStorage.setItem('chefdevalor_config', JSON.stringify(businessConfig));
-  }, [businessConfig]);
-
-  useEffect(() => {
-    localStorage.setItem('chefdevalor_ingredients', JSON.stringify(ingredients));
-  }, [ingredients]);
-
-  useEffect(() => {
-    localStorage.setItem('chefdevalor_saved_recipes', JSON.stringify(savedRecipes));
-  }, [savedRecipes]);
-
-
-  // Verificar se já estava logado (salvo no navegador)
-  useEffect(() => {
-    const savedAuth = localStorage.getItem('doceLucroAuth');
-    if (savedAuth === 'true') {
-      setIsAuthenticated(true);
-    }
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
-  // Função de Login
-  const handleLogin = (e: React.FormEvent) => {
+  // Função de Login Seguro
+  const handleLogin = async (e: any) => {
     e.preventDefault();
-    if (inputPassword === ACCESS_PASSWORD) {
-      setIsAuthenticated(true);
-      localStorage.setItem('doceLucroAuth', 'true'); // Lembrar login
-      setLoginError('');
-    } else {
-      setLoginError('Senha incorreta. Verifique seu acesso.');
+    setLoginError('');
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error: any) {
+      console.error("Erro ao logar:", error);
+      let mensagemErro = "Erro desconhecido.";
+      if (error.code === 'auth/invalid-email') mensagemErro = "E-mail inválido.";
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') mensagemErro = "E-mail ou senha incorretos.";
+      if (error.code === 'auth/wrong-password') mensagemErro = "Senha incorreta.";
+      
+      setLoginError(mensagemErro);
     }
   };
 
-  // Função de Logout
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('doceLucroAuth');
-  };
-
-  // --- HANDLERS DE RECEITAS SALVAS ---
-  const handleSaveRecipe = () => {
-    if (!recipe.name) {
-      alert("Por favor, nomeie a receita antes de salvar!");
-      return;
-    }
-    const recipeToSave = {
-      ...recipe,
-      id: Date.now(),
-      savedAt: new Date().toLocaleString('pt-BR'),
-      hourlyRate: calculateHourlyRate().toFixed(2), // Salva a taxa horária para contexto
-    };
-    setSavedRecipes([...savedRecipes, recipeToSave]);
-    alert(`Receita "${recipe.name}" salva com sucesso!`);
-    setActiveTab('savedRecipes');
-  };
-
-  const handleLoadRecipe = (recipeId: number) => {
-    const recipeToLoad = savedRecipes.find((r: any) => r.id === recipeId);
-    if (recipeToLoad) {
-      setRecipe({
-        ...recipeToLoad,
-        profitMargin: recipeToLoad.profitMargin || 30, // Garante valor padrão se faltar
-      } as RecipeData);
-      alert(`Receita "${recipeToLoad.name}" carregada!`);
-      setActiveTab('calculator');
+  // Função de Sair
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Erro ao sair:", error);
     }
   };
 
-  const handleDeleteRecipe = (recipeId: number, recipeName: string) => {
-    if (window.confirm(`Tem certeza que deseja deletar a receita: "${recipeName}"?`)) {
-      setSavedRecipes(savedRecipes.filter((r: any) => r.id !== recipeId));
-    }
-  };
-  
-  // --- CÁLCULOS MATEMÁTICOS ---
-  const calculateHourlyRate = (): number => {
-    const weeksPerMonth: number = 4.28;
-    // Conversão explícita para number
-    const totalHoursMonth: number = parseFloat(businessConfig.hoursPerDay as string) * parseFloat(businessConfig.daysPerWeek as string) * weeksPerMonth;
-    const totalCost: number = parseFloat(businessConfig.salary as string) + parseFloat(businessConfig.fixedCosts as string);
+  // --- CÁLCULOS ---
+  const calculateHourlyRate = () => {
+    const weeksPerMonth = 4.28;
+    const totalHoursMonth = parseFloat(businessConfig.hoursPerDay) * parseFloat(businessConfig.daysPerWeek) * weeksPerMonth;
+    const totalCost = parseFloat(businessConfig.salary) + parseFloat(businessConfig.fixedCosts);
     return totalHoursMonth > 0 ? totalCost / totalHoursMonth : 0;
   };
 
-  const hourlyRate: number = calculateHourlyRate();
+  const hourlyRate = calculateHourlyRate();
 
   const calculateRecipeCosts = () => {
-    let totalIngredientsCost: number = 0;
+    let totalIngredientsCost = 0;
     recipe.selectedIngredients.forEach((item: any) => {
-      const ingredient = ingredients.find((i: any) => i.id === item.id);
+      const ingredient = ingredients.find((i) => i.id === item.id);
       if (ingredient) {
-        const costPerGram: number = ingredient.cost / ingredient.packageWeight;
+        const costPerGram = ingredient.cost / ingredient.packageWeight;
         totalIngredientsCost += costPerGram * item.quantity;
       }
     });
 
-    const variableCosts: number = totalIngredientsCost * 0.10;
-    const laborCost: number = (recipe.timeSpentMinutes / 60) * hourlyRate;
-    const totalProductionCost: number = totalIngredientsCost + variableCosts + laborCost;
-    const profitValue: number = totalProductionCost * (recipe.profitMargin / 100);
-    const totalSalePrice: number = totalProductionCost + profitValue;
-    const pricePerUnit: number = recipe.yields > 0 ? totalSalePrice / recipe.yields : 0;
+    const variableCosts = totalIngredientsCost * 0.10;
+    const laborCost = (recipe.timeSpentMinutes / 60) * hourlyRate;
+    const totalProductionCost = totalIngredientsCost + variableCosts + laborCost;
+    const profitValue = totalProductionCost * (recipe.profitMargin / 100);
+    const totalSalePrice = totalProductionCost + profitValue;
+    const pricePerUnit = recipe.yields > 0 ? totalSalePrice / recipe.yields : 0;
 
-    return {
-      totalIngredientsCost,
-      variableCosts,
-      laborCost,
-      totalProductionCost,
-      profitValue,
-      totalSalePrice,
-      pricePerUnit
-    };
+    return { totalIngredientsCost, variableCosts, laborCost, totalProductionCost, profitValue, totalSalePrice, pricePerUnit };
   };
 
   const results = calculateRecipeCosts();
+  const formatMoney = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // --- FUNÇÕES DE UTILIDADE ---
-  const formatMoney = (value: number): string => {
-    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  };
-
-  // --- HANDLERS DE INGREDIENTES ---
+  // --- HANDLERS ---
   const handleAddIngredientToDb = () => {
     if (newIngredient.name && newIngredient.cost && newIngredient.packageWeight) {
       setIngredients([...ingredients, { 
@@ -214,579 +162,342 @@ const App: React.FC = () => {
         id: Date.now(), 
         packageWeight: parseFloat(newIngredient.packageWeight), 
         cost: parseFloat(newIngredient.cost) 
-      } as Ingredient]); 
+      } as Ingredient]);
       setNewIngredient({ name: '', packageWeight: '', cost: '' });
     }
   };
 
-  const handleAddIngredientToRecipe = (ingredientId: string) => {
-    const id = parseInt(ingredientId);
+  const handleAddIngredientToRecipe = (idStr: string) => {
+    const id = parseInt(idStr);
     if (!id) return;
     if (!recipe.selectedIngredients.find((i: any) => i.id === id)) {
-      setRecipe({
-        ...recipe,
-        selectedIngredients: [...recipe.selectedIngredients, { id: id, quantity: 0 }]
-      });
+      setRecipe({ ...recipe, selectedIngredients: [...recipe.selectedIngredients, { id, quantity: 0 }] });
     }
   };
 
-  const updateIngredientQuantity = (id: number, quantity: string) => {
-    const updated = recipe.selectedIngredients.map((item: any) => 
-      item.id === id ? { ...item, quantity: parseFloat(quantity) || 0 } : item
-    );
-    setRecipe({ ...recipe, selectedIngredients: updated as any });
+  const updateIngredientQuantity = (id: number, qty: string) => {
+    const updated = recipe.selectedIngredients.map((item: any) => item.id === id ? { ...item, quantity: parseFloat(qty) || 0 } : item);
+    setRecipe({ ...recipe, selectedIngredients: updated });
   };
 
   const removeIngredientFromRecipe = (id: number) => {
-    setRecipe({
-      ...recipe,
-      selectedIngredients: recipe.selectedIngredients.filter((item: any) => item.id !== id) as any
-    });
+    setRecipe({ ...recipe, selectedIngredients: recipe.selectedIngredients.filter((i: any) => i.id !== id) });
   };
 
-  // --- RENDERIZAÇÃO ---
+  const handleSaveRecipe = () => {
+    if (!recipe.name) return alert("Dê um nome para a receita!");
+    const newSaved = { ...recipe, id: Date.now(), savedAt: new Date().toLocaleString(), hourlyRate: hourlyRate.toFixed(2) };
+    setSavedRecipes([...savedRecipes, newSaved]);
+    alert("Receita Salva!");
+    setActiveTab('savedRecipes');
+  };
 
-  // TELA DE LOGIN
-  if (!isAuthenticated) {
+  const handleLoadRecipe = (id: number) => {
+    const found = savedRecipes.find((r) => r.id === id);
+    if (found) {
+      setRecipe({ ...found, profitMargin: found.profitMargin || 30 });
+      alert("Receita Carregada!");
+      setActiveTab('calculator');
+    }
+  };
+
+  const handleDeleteRecipe = (id: number) => {
+    if (window.confirm("Deletar receita?")) {
+      setSavedRecipes(savedRecipes.filter((r) => r.id !== id));
+    }
+  };
+
+  // TELA DE CARREGAMENTO
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center text-pink-500 font-bold animate-pulse text-xl">Carregando Chef de Valor...</div>;
+  }
+
+  // TELA DE LOGIN (Se não estiver logado)
+  if (!user) {
     return (
-      <div className="min-h-screen bg-[#FFF8E7] flex items-center justify-center px-4 font-['Nunito']">
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Pacifico&display=swap');
-          .font-pacifico { font-family: 'Pacifico', cursive; }
-          .font-nunito { font-family: 'Nunito', sans-serif; }
-        `}</style>
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 border border-[#FFE0B2] text-center">
-          <div className="inline-flex items-center justify-center p-4 bg-[#FFF3E0] rounded-full mb-6">
-            <ChefHat size={40} className="text-[#E65100]" />
-          </div>
-          <h1 className="text-4xl font-pacifico text-[#BF360C] mb-2">Chef de Valor</h1>
-          <p className="text-[#8D6E63] mb-8">O ingrediente secreto do seu sucesso financeiro!</p>
+      <div className="min-h-screen bg-pink-50 flex items-center justify-center p-4 font-sans text-gray-800">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-pink-100">
+          <div className="text-4xl mb-4">🧁</div>
+          <h1 className="text-3xl font-bold text-pink-600 mb-2">Chef de Valor</h1>
+          <p className="text-gray-500 mb-6">Acesso Exclusivo para Alunas</p>
           
           <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <input
-                type="password"
-                placeholder="Digite sua senha de acesso"
-                value={inputPassword}
-                onChange={(e) => setInputPassword(e.target.value)}
-                className="w-full p-4 rounded-xl border-2 border-[#FFE0B2] bg-[#FFF8E1] text-[#5D4037] placeholder-[#D7CCC8] focus:border-[#E65100] focus:outline-none font-bold text-center text-lg"
-              />
-            </div>
+            <input 
+              type="email" 
+              placeholder="Seu E-mail" 
+              value={email} 
+              onChange={(e) => setEmail(e.target.value)} 
+              className="w-full p-3 border border-pink-200 rounded-lg text-center outline-none focus:border-pink-500"
+              required
+            />
+            <input 
+              type="password" 
+              placeholder="Sua Senha" 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)} 
+              className="w-full p-3 border border-pink-200 rounded-lg text-center outline-none focus:border-pink-500"
+              required
+            />
             
-            {loginError && (
-              <p className="text-red-500 text-sm font-bold animate-pulse">{loginError}</p>
-            )}
+            {loginError && <p className="text-red-500 text-sm font-bold bg-red-50 p-2 rounded">{loginError}</p>}
 
-            <button 
-              type="submit"
-              className="w-full bg-gradient-to-r from-[#E65100] to-[#BF360C] text-white p-4 rounded-xl font-bold text-lg shadow-lg hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
-            >
-              <Lock size={20} /> Entrar no Sistema
+            <button type="submit" className="w-full bg-pink-500 text-white p-3 rounded-lg font-bold hover:bg-pink-600 shadow-lg transition-transform active:scale-95">
+              Entrar 🔒
             </button>
           </form>
-          
-          <p className="mt-8 text-xs text-[#D7CCC8]">
-            Não tem acesso? Entre em contato com o suporte.
-          </p>
+          <p className="text-xs text-gray-400 mt-6">Esqueceu a senha? Contate o suporte.</p>
         </div>
       </div>
     );
   }
 
-  // APP PRINCIPAL (SÓ RENDERIZA SE ESTIVER LOGADO)
+  // APP PRINCIPAL (Só aparece se tiver logado)
   return (
-    <div className="min-h-screen bg-[#FFF8E7] font-['Nunito'] text-[#5D4037] pb-20">
-      {/* Inject Fonts and Styles */}
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Pacifico&display=swap');
-        
-        .font-pacifico { font-family: 'Pacifico', cursive; }
-        .font-nunito { font-family: 'Nunito', sans-serif; }
-        
-        .candy-card {
-          background: rgba(255, 255, 255, 0.95);
-          border-radius: 24px;
-          box-shadow: 0 10px 30px -10px rgba(139, 69, 19, 0.15);
-          border: 1px solid #FFE0B2;
-        }
-
-        .candy-input {
-          background: #FFF;
-          border: 2px solid #FFE0B2;
-          border-radius: 16px;
-          transition: all 0.3s ease;
-          color: #5D4037;
-        }
-        .candy-input:focus {
-          border-color: #E65100;
-          box-shadow: 0 0 0 4px rgba(230, 81, 0, 0.1);
-          outline: none;
-        }
-        
-        .candy-input::placeholder {
-          color: #D7CCC8;
-        }
-
-        .btn-primary {
-          background: linear-gradient(135deg, #E65100 0%, #BF360C 100%);
-          box-shadow: 0 4px 15px rgba(191, 54, 12, 0.3);
-        }
-        .btn-primary:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(191, 54, 12, 0.4);
-        }
-      `}</style>
-
-      {/* Hero Header */}
-      <header className="relative bg-[#FFF3E0] pt-10 pb-16 overflow-hidden border-b border-[#FFE0B2]">
-        <div className="absolute top-[-20%] right-[-10%] w-64 h-64 bg-[#FFCC80] rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-        <div className="absolute top-[-10%] left-[-10%] w-72 h-72 bg-[#FFAB91] rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
-        
-        <div className="max-w-5xl mx-auto px-6 text-center relative z-10">
-          <div className="flex justify-end mb-4">
-            <button onClick={handleLogout} className="text-xs font-bold text-[#E65100] flex items-center gap-1 bg-white px-3 py-1 rounded-full shadow-sm">
-              Sair <Lock size={10} />
-            </button>
+    <div className="min-h-screen bg-pink-50 font-sans text-gray-800 pb-20">
+      <header className="bg-white border-b border-pink-100 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🧁</span>
+            <h1 className="text-xl font-bold text-pink-600 hidden sm:block">Chef de Valor</h1>
           </div>
-          <div className="inline-flex items-center justify-center p-4 bg-white rounded-full shadow-lg mb-4 border border-[#FFE0B2]">
-            <span className="text-3xl">🧁</span>
+          <div className="flex items-center gap-3">
+             <span className="text-xs text-gray-400 hidden sm:inline">{user.email}</span>
+             <button onClick={handleLogout} className="text-xs text-red-500 border border-red-200 px-3 py-2 rounded-lg hover:bg-red-50 flex items-center gap-1 font-bold transition-colors">
+               Sair <LogOut size={14}/>
+             </button>
           </div>
-          <h1 className="font-pacifico text-5xl text-[#BF360C] mb-2 drop-shadow-sm">Chef de Valor</h1>
-          <p className="text-[#8D6E63] font-nunito text-lg max-w-xl mx-auto font-semibold">
-            O ingrediente secreto do seu sucesso financeiro!
-          </p>
         </div>
-      </header>
-
-      {/* Floating Navigation */}
-      <div className="sticky top-4 z-50 max-w-4xl mx-auto px-4 mb-8">
-        <nav className="bg-white/90 backdrop-blur-md rounded-full p-2 shadow-xl border border-[#FFE0B2] flex justify-between md:justify-center gap-2 overflow-x-auto">
+        <nav className="max-w-4xl mx-auto px-4 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
           {[
-            { id: 'config', label: 'Meu Negócio', icon: Settings, color: 'text-blue-600' },
-            { id: 'ingredients', label: 'Despensa', icon: Package, color: 'text-orange-600' },
-            { id: 'calculator', label: 'Calculadora', icon: Calculator, color: 'text-[#BF360C]' },
-            { id: 'savedRecipes', label: 'Receitas Salvas', icon: List, color: 'text-green-600' },
+            { id: 'config', label: '⚙️ Negócio' },
+            { id: 'ingredients', label: '📦 Despensa' },
+            { id: 'calculator', label: '🧮 Calculadora' },
+            { id: 'savedRecipes', label: '📂 Salvas' },
           ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`
-                flex items-center gap-2 px-5 py-2.5 rounded-full font-nunito font-bold text-sm transition-all whitespace-nowrap
-                ${activeTab === tab.id 
-                  ? 'bg-[#FFF3E0] text-[#BF360C] shadow-inner border border-[#FFE0B2]' 
-                  : 'text-[#8D6E63] hover:bg-[#FFF8E1] hover:text-[#5D4037]'}
-              `}
-            >
-              <tab.icon size={18} className={activeTab === tab.id ? tab.color : ''} />
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === tab.id ? 'bg-pink-500 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'}`}>
               {tab.label}
             </button>
           ))}
         </nav>
-      </div>
+      </header>
 
-      <main className="max-w-5xl mx-auto px-4 animate-fade-in">
+      <main className="max-w-4xl mx-auto px-4 mt-6 space-y-6">
         
-        {/* TAB: CONFIGURAÇÃO DO NEGÓCIO */}
         {activeTab === 'config' && (
-          <div className="grid md:grid-cols-2 gap-8 items-start">
-            <div className="candy-card p-8 bg-white">
-              <h2 className="font-nunito font-bold text-2xl text-[#5D4037] mb-2 flex items-center gap-2">
-                <div className="p-2 bg-[#FFF3E0] rounded-xl text-[#E65100]"><ChefHat size={24} /></div>
-                Seu Salário
-              </h2>
-              <p className="text-[#8D6E63] mb-8 leading-relaxed">
-                Confeiteira profissional merece salário! Vamos definir quanto você quer tirar por mês e quais são seus gastos fixos.
-              </p>
-
-              <div className="space-y-6">
-                <div className="group">
-                  <label className="block text-sm font-bold text-[#5D4037] mb-2 ml-1">Quanto você quer ganhar? (Mensal)</label>
-                  <div className="relative transform transition-transform group-hover:scale-[1.01]">
-                    <span className="absolute left-4 top-3.5 text-[#FF7043] font-bold">R$</span>
-                    <input 
-                      type="number" 
-                      value={businessConfig.salary}
-                      onChange={(e) => setBusinessConfig({...businessConfig, salary: e.target.value})}
-                      className="candy-input w-full pl-12 p-3 text-lg font-bold"
-                    />
-                  </div>
-                </div>
-                
-                <div className="group">
-                  <label className="block text-sm font-bold text-[#5D4037] mb-2 ml-1">Custos Fixos (MEI, Luz, Água)</label>
-                  <div className="relative transform transition-transform group-hover:scale-[1.01]">
-                    <span className="absolute left-4 top-3.5 text-[#FF7043] font-bold">R$</span>
-                    <input 
-                      type="number" 
-                      value={businessConfig.fixedCosts}
-                      onChange={(e) => setBusinessConfig({...businessConfig, fixedCosts: e.target.value})}
-                      className="candy-input w-full pl-12 p-3 text-lg font-bold"
-                    />
-                  </div>
-                </div>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-pink-100 space-y-4 animate-fade-in">
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">⚙️ Configuração do Ateliê</h2>
+            <p className="text-sm text-gray-400">Defina seus custos para calcular o valor da sua hora.</p>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Salário Desejado (R$)</label>
+                <input type="number" value={businessConfig.salary} onChange={(e) => setBusinessConfig({...businessConfig, salary: e.target.value})} className="w-full p-3 border rounded-xl font-bold text-gray-700" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Custos Fixos (R$)</label>
+                <input type="number" value={businessConfig.fixedCosts} onChange={(e) => setBusinessConfig({...businessConfig, fixedCosts: e.target.value})} className="w-full p-3 border rounded-xl font-bold text-gray-700" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Horas / Dia</label>
+                <input type="number" value={businessConfig.hoursPerDay} onChange={(e) => setBusinessConfig({...businessConfig, hoursPerDay: e.target.value})} className="w-full p-3 border rounded-xl font-bold text-gray-700" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Dias / Semana</label>
+                <input type="number" value={businessConfig.daysPerWeek} onChange={(e) => setBusinessConfig({...businessConfig, daysPerWeek: e.target.value})} className="w-full p-3 border rounded-xl font-bold text-gray-700" />
               </div>
             </div>
-
-            <div className="space-y-6">
-               <div className="candy-card p-8 bg-[#FFF3E0] border-[#FFE0B2]">
-                  <h3 className="font-bold text-xl text-[#E65100] mb-6">Sua Jornada</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-[#BF360C] uppercase mb-2">Horas / Dia</label>
-                      <input 
-                        type="number" 
-                        value={businessConfig.hoursPerDay}
-                        onChange={(e) => setBusinessConfig({...businessConfig, hoursPerDay: e.target.value})}
-                        className="candy-input w-full p-3 text-center text-xl font-bold text-[#BF360C] border-[#FFCC80] focus:border-[#E65100] bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-[#BF360C] uppercase mb-2">Dias / Semana</label>
-                      <input 
-                        type="number" 
-                        value={businessConfig.daysPerWeek}
-                        onChange={(e) => setBusinessConfig({...businessConfig, daysPerWeek: e.target.value})}
-                        className="candy-input w-full p-3 text-center text-xl font-bold text-[#BF360C] border-[#FFCC80] focus:border-[#E65100] bg-white"
-                      />
-                    </div>
-                  </div>
-               </div>
-
-               <div className="candy-card p-8 bg-[#3E2723] text-white border-none relative overflow-hidden shadow-2xl">
-                  <div className="absolute -right-10 -top-10 w-40 h-40 bg-[#FF7043] rounded-full blur-3xl opacity-20"></div>
-                  <div className="relative z-10">
-                    <p className="text-[#D7CCC8] font-bold text-sm uppercase tracking-widest mb-2">Valor da sua Hora</p>
-                    <div className="text-5xl font-pacifico text-[#FFCC80] mb-2">
-                      {formatMoney(hourlyRate)}
-                    </div>
-                    <p className="text-[#BCAAA4] text-sm">Esse valor será incluído automaticamente nas suas receitas!</p>
-                  </div>
-               </div>
+            <div className="bg-gradient-to-r from-pink-500 to-orange-400 text-white p-6 rounded-2xl text-center mt-4 shadow-lg">
+              <p className="text-sm opacity-90 mb-1">Sua hora de trabalho vale:</p>
+              <p className="text-4xl font-bold">{formatMoney(hourlyRate)}</p>
             </div>
           </div>
         )}
 
-        {/* TAB: INGREDIENTES */}
         {activeTab === 'ingredients' && (
-          <div className="space-y-8">
-            <div className="candy-card p-6 md:p-8 bg-white">
-              <div className="flex flex-col md:flex-row md:items-end gap-4 mb-8 bg-[#FFF8E1] p-6 rounded-3xl border border-[#FFE0B2]">
-                <div className="flex-1">
-                  <label className="text-xs font-bold text-[#E65100] uppercase ml-2 mb-1 block">Novo Ingrediente</label>
-                  <input 
-                    type="text" 
-                    placeholder="Ex: Leite Ninho 400g"
-                    value={newIngredient.name}
-                    onChange={(e) => setNewIngredient({...newIngredient, name: e.target.value})}
-                    className="candy-input w-full p-3"
-                  />
-                </div>
-                <div className="w-32">
-                  <label className="text-xs font-bold text-[#E65100] uppercase ml-2 mb-1 block">Peso (g)</label>
-                  <input 
-                    type="number" 
-                    placeholder="400"
-                    value={newIngredient.packageWeight}
-                    onChange={(e) => setNewIngredient({...newIngredient, packageWeight: e.target.value})}
-                    className="candy-input w-full p-3"
-                  />
-                </div>
-                <div className="w-32">
-                  <label className="text-xs font-bold text-[#E65100] uppercase ml-2 mb-1 block">Preço</label>
-                  <input 
-                    type="number" 
-                    placeholder="0.00"
-                    value={newIngredient.cost}
-                    onChange={(e) => setNewIngredient({...newIngredient, cost: e.target.value})}
-                    className="candy-input w-full p-3"
-                  />
-                </div>
-                <button 
-                  onClick={handleAddIngredientToDb}
-                  className="btn-primary h-[50px] w-[50px] rounded-2xl text-white flex items-center justify-center shrink-0 shadow-lg hover:scale-105 transition-transform"
-                >
-                  <Plus size={24} />
-                </button>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-pink-100 space-y-6 animate-fade-in">
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">📦 Despensa de Ingredientes</h2>
+            
+            {/* Formulário Novo Ingrediente */}
+            <div className="bg-yellow-50 p-5 rounded-2xl border border-yellow-100 grid md:grid-cols-4 gap-4 items-end shadow-sm">
+              <div className="md:col-span-2">
+                <label className="text-xs font-bold text-yellow-700 uppercase mb-1 block">Nome do Item</label>
+                <input type="text" placeholder="Ex: Leite Condensado" value={newIngredient.name} onChange={(e) => setNewIngredient({...newIngredient, name: e.target.value})} className="w-full p-2 border border-yellow-200 rounded-lg focus:outline-none focus:border-yellow-500" />
               </div>
+              <div>
+                <label className="text-xs font-bold text-yellow-700 uppercase mb-1 block">Peso (g/ml)</label>
+                <input type="number" placeholder="Ex: 395" value={newIngredient.packageWeight} onChange={(e) => setNewIngredient({...newIngredient, packageWeight: e.target.value})} className="w-full p-2 border border-yellow-200 rounded-lg focus:outline-none focus:border-yellow-500" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-yellow-700 uppercase mb-1 block">Preço Pago (R$)</label>
+                <div className="flex gap-2">
+                  <input type="number" placeholder="0.00" value={newIngredient.cost} onChange={(e) => setNewIngredient({...newIngredient, cost: e.target.value})} className="w-full p-2 border border-yellow-200 rounded-lg focus:outline-none focus:border-yellow-500" />
+                  <button onClick={handleAddIngredientToDb} className="bg-green-500 text-white p-2 rounded-lg hover:bg-green-600 font-bold shadow-md transition-transform active:scale-95">
+                    <Plus size={20} />
+                  </button>
+                </div>
+              </div>
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {ingredients.map((ing: Ingredient) => (
-                  <div key={ing.id} className="group bg-white border border-[#FFE0B2] rounded-2xl p-4 flex justify-between items-center hover:shadow-lg hover:border-[#FFCC80] transition-all">
-                    <div>
-                      <h4 className="font-bold text-[#5D4037]">{ing.name}</h4>
-                      <p className="text-xs text-[#8D6E63] mt-1">
-                        {ing.packageWeight}g • <span className="text-[#BF360C] font-bold">{formatMoney(ing.cost)}</span>
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="text-xs font-mono bg-[#FFF3E0] text-[#E65100] px-2 py-1 rounded-lg border border-[#FFE0B2]">
-                        {formatMoney(ing.cost / ing.packageWeight)}/g
-                      </span>
-                      <button 
-                        onClick={() => setIngredients(ingredients.filter((i: any) => i.id !== ing.id))}
-                        className="text-[#D7CCC8] hover:text-red-400 transition-colors p-1"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
+            {/* Lista */}
+            <div className="grid gap-2">
+              {ingredients.map((ing) => (
+                <div key={ing.id} className="flex justify-between items-center p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors bg-white shadow-sm">
+                  <div>
+                    <p className="font-bold text-gray-800">{ing.name}</p>
+                    <p className="text-xs text-gray-500">{formatMoney(ing.cost)} • {ing.packageWeight}g</p>
                   </div>
-                ))}
-              </div>
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-green-600 bg-green-50 px-3 py-1 rounded-full">{formatMoney(ing.cost / ing.packageWeight)}/g</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
-        {/* TAB: CALCULADORA */}
         {activeTab === 'calculator' && (
-          <div className="grid lg:grid-cols-3 gap-8">
+          <div className="grid lg:grid-cols-3 gap-6 animate-fade-in">
             
-            {/* Esquerda: Card da Receita */}
+            {/* Esquerda: Dados */}
             <div className="lg:col-span-2 space-y-6">
-              <div className="candy-card p-8 relative overflow-hidden bg-white">
-                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#E65100] via-[#FF7043] to-[#FFCC80]"></div>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-pink-100 space-y-4">
+                <div className="flex justify-between items-center">
+                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><Calculator className="text-pink-500"/> Calculadora</h2>
+                   <button onClick={handleSaveRecipe} className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-bold hover:bg-green-200 flex items-center gap-1 transition-colors">
+                     <Save size={14}/> Salvar
+                   </button>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome da Receita</label>
+                  <input type="text" value={recipe.name} onChange={(e) => setRecipe({...recipe, name: e.target.value})} className="w-full p-3 border rounded-xl font-bold text-lg text-pink-600 focus:border-pink-500 focus:outline-none" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Rendimento (un)</label>
+                    <input type="number" value={recipe.yields} onChange={(e) => setRecipe({...recipe, yields: parseFloat(e.target.value)})} className="w-full p-2 border rounded-lg font-bold" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tempo Gasto (min)</label>
+                    <input type="number" value={recipe.timeSpentMinutes} onChange={(e) => setRecipe({...recipe, timeSpentMinutes: parseFloat(e.target.value)})} className="w-full p-2 border rounded-lg font-bold" />
+                  </div>
+                </div>
                 
-                <div className="mb-8">
-                  <label className="block text-xs font-bold text-[#8D6E63] uppercase mb-2 ml-1">Nome da Receita</label>
-                  <input 
-                    type="text" 
-                    value={recipe.name}
-                    onChange={(e) => setRecipe({...recipe, name: e.target.value})}
-                    className="candy-input w-full text-3xl font-pacifico text-[#BF360C] p-2 border-none focus:ring-0 bg-transparent placeholder-[#FFCC80]"
-                    placeholder="Nome do Doce..."
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-6 mb-8">
-                  <div className="bg-[#FFF3E0] rounded-2xl p-4 border border-[#FFE0B2]">
-                    <div className="flex items-center gap-2 mb-2 text-[#E65100]">
-                      <Package size={18} />
-                      <span className="font-bold text-sm uppercase">Rendimento</span>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <input 
-                        type="number" 
-                        value={recipe.yields}
-                        onChange={(e) => setRecipe({...recipe, yields: parseFloat(e.target.value)})}
-                        className="bg-transparent text-2xl font-bold text-[#5D4037] w-20 outline-none border-b border-[#FFCC80] focus:border-[#E65100]"
-                      />
-                      <span className="text-sm text-[#8D6E63]">unidades</span>
-                    </div>
-                  </div>
-
-                  <div className="bg-[#ECEFF1] rounded-2xl p-4 border border-[#CFD8DC]">
-                    <div className="flex items-center gap-2 mb-2 text-[#546E7A]">
-                      <Clock size={18} />
-                      <span className="font-bold text-sm uppercase">Tempo</span>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <input 
-                        type="number" 
-                        value={recipe.timeSpentMinutes}
-                        onChange={(e) => setRecipe({...recipe, timeSpentMinutes: parseFloat(e.target.value)})}
-                        className="bg-transparent text-2xl font-bold text-[#37474F] w-20 outline-none border-b border-[#B0BEC5] focus:border-[#546E7A]"
-                      />
-                      <span className="text-sm text-[#78909C]">minutos</span>
-                    </div>
+                <div className="border-t border-dashed border-gray-200 pt-4 mt-2">
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Adicionar Ingrediente da Despensa</label>
+                  <div className="relative">
+                    <select value="" onChange={(e) => handleAddIngredientToRecipe(e.target.value)} className="w-full p-3 border rounded-xl bg-gray-50 cursor-pointer appearance-none hover:bg-white transition-colors">
+                        <option value="" disabled>+ Clique para selecionar...</option>
+                        {ingredients.map((ing) => <option key={ing.id} value={ing.id}>{ing.name}</option>)}
+                    </select>
+                    <div className="absolute right-3 top-3 text-gray-400 pointer-events-none"><Plus size={16} /></div>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-lg text-[#5D4037]">Ingredientes</h3>
-                    <div className="relative">
-                       <select 
-                        value="" 
-                        onChange={(e) => {
-                          handleAddIngredientToRecipe(e.target.value);
-                        }}
-                        className="appearance-none bg-[#FFF8E1] hover:bg-[#FFE0B2] text-[#5D4037] pl-4 pr-8 py-2 rounded-full text-sm font-bold cursor-pointer transition-colors outline-none border border-[#FFE0B2]"
-                      >
-                        <option value="" disabled>+ Adicionar Item</option>
-                        {ingredients.map((ing: Ingredient) => (
-                          <option key={ing.id} value={ing.id}>{ing.name}</option>
-                        ))}
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[#8D6E63]">
-                        <Plus size={14} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {recipe.selectedIngredients.map((item: any) => {
-                      const ingredient = ingredients.find((i: any) => i.id === item.id);
-                      if (!ingredient) return null;
-                      const itemCost = (ingredient.cost / ingredient.packageWeight) * item.quantity;
-                      
-                      return (
-                        <div key={item.id} className="flex items-center gap-4 p-3 bg-white border border-[#FFE0B2] rounded-2xl shadow-sm hover:shadow-md transition-shadow">
-                          <div className="flex-1">
-                            <p className="font-bold text-[#5D4037]">{ingredient.name}</p>
-                            <p className="text-xs text-[#8D6E63]">Emb. {ingredient.packageWeight}g</p>
-                          </div>
-                          <div className="flex items-center gap-2 bg-[#FFF8E1] rounded-lg px-2 py-1 border border-[#FFE0B2]">
-                            <input 
-                              type="number" 
-                              value={item.quantity}
-                              onChange={(e) => updateIngredientQuantity(item.id, e.target.value)}
-                              className="w-16 text-right bg-transparent font-bold text-[#5D4037] outline-none border-b border-[#FFCC80] focus:border-[#E65100]"
-                            />
-                            <span className="text-xs font-bold text-[#8D6E63]">g</span>
-                          </div>
-                          <div className="w-20 text-right font-bold text-[#BF360C]">
-                            {formatMoney(itemCost)}
-                          </div>
-                          <button 
-                            onClick={() => removeIngredientFromRecipe(item.id)}
-                            className="text-[#D7CCC8] hover:text-red-400 p-2"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      );
-                    })}
+                <div className="space-y-2">
+                  {recipe.selectedIngredients.map((item) => {
+                    const ing = ingredients.find((i) => i.id === item.id);
+                    if (!ing) return null;
+                    const itemTotalCost = (ing.cost / ing.packageWeight) * item.quantity;
                     
-                    {recipe.selectedIngredients.length === 0 && (
-                      <div className="text-center py-12 bg-[#FFF8E1] rounded-2xl border-2 border-dashed border-[#FFE0B2] text-[#8D6E63]">
-                        <Package size={32} className="mx-auto mb-2 opacity-50" />
-                        <p>Sua receita está vazia. Adicione ingredientes!</p>
+                    return (
+                      <div key={item.id} className="flex items-center gap-3 p-3 border border-gray-100 rounded-xl bg-white shadow-sm">
+                        <div className="flex-1">
+                          <p className="font-bold text-sm text-gray-700">{ing.name}</p>
+                        </div>
+                        <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-2">
+                          <input type="number" value={item.quantity} onChange={(e) => updateIngredientQuantity(item.id, e.target.value)} className="w-16 p-1 bg-transparent text-right font-bold outline-none" />
+                          <span className="text-xs text-gray-500 font-bold">g</span>
+                        </div>
+                        <div className="w-20 text-right text-xs font-bold text-gray-500">
+                            {formatMoney(itemTotalCost)}
+                        </div>
+                        <button onClick={() => removeIngredientFromRecipe(item.id)} className="text-gray-300 hover:text-red-500 font-bold px-2 transition-colors">
+                            <Trash2 size={16} />
+                        </button>
                       </div>
-                    )}
-                  </div>
+                    );
+                  })}
+                  {recipe.selectedIngredients.length === 0 && <p className="text-center text-gray-400 text-sm py-4">Nenhum ingrediente adicionado ainda.</p>}
                 </div>
-                
-                <button
-                    onClick={handleSaveRecipe}
-                    className="mt-6 w-full btn-primary text-white p-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:scale-[1.01] transition-transform"
-                >
-                    <Save size={20} /> Salvar Receita
-                </button>
+                <button onClick={handleSaveRecipe} className="w-full bg-green-500 text-white p-3 rounded-xl font-bold mt-4 hover:bg-green-600 shadow-md transition-transform active:scale-95">Salvar Receita 💾</button>
               </div>
             </div>
 
             {/* Direita: Resultados */}
             <div className="space-y-6">
-              
-              <div className="candy-card p-6 bg-white">
-                <h3 className="font-bold text-[#5D4037] mb-4 flex items-center gap-2">
-                  <TrendingUp className="text-[#E65100]" size={20} /> Lucro Desejado
-                </h3>
-                <div className="mb-8">
-                  <div className="flex justify-between mb-2">
-                    <span className="text-3xl font-bold text-[#5D4037]">{recipe.profitMargin}%</span>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-pink-100 space-y-4">
+                <h3 className="font-bold text-gray-800 flex items-center gap-2"><TrendingUp className="text-green-500"/> Margem de Lucro</h3>
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-sm text-gray-500">Lucro da Empresa:</span>
+                    <span className="font-bold text-2xl text-pink-600">{recipe.profitMargin}%</span>
                   </div>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="200" 
-                    value={recipe.profitMargin} 
-                    onChange={(e) => setRecipe({...recipe, profitMargin: parseFloat(e.target.value)})}
-                    className="w-full h-3 bg-[#FFF3E0] rounded-full appearance-none cursor-pointer accent-[#E65100]"
-                  />
+                  <input type="range" min="0" max="200" value={recipe.profitMargin} onChange={(e) => setRecipe({...recipe, profitMargin: parseFloat(e.target.value)})} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-pink-500" />
                 </div>
-
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between py-2 border-b border-[#FFF8E1]">
-                    <span className="text-[#8D6E63]">Ingredientes</span>
-                    <span className="font-bold text-[#5D4037]">{formatMoney(results.totalIngredientsCost)}</span>
+                
+                <div className="space-y-3 text-sm border-t border-dashed pt-4">
+                  <div className="flex justify-between text-gray-600">
+                    <span>Ingredientes:</span> 
+                    <span className="font-bold">{formatMoney(results.totalIngredientsCost)}</span>
                   </div>
-                  <div className="flex justify-between py-2 border-b border-[#FFF8E1]">
-                    <span className="text-[#8D6E63] flex items-center gap-1">Custos Variáveis <span className="text-[10px] bg-[#FFF3E0] text-[#E65100] px-1 rounded">10%</span></span>
-                    <span className="font-bold text-[#5D4037]">{formatMoney(results.variableCosts)}</span>
+                  <div className="flex justify-between text-gray-600">
+                    <span>Custos Variáveis (Gás/Luz 10%):</span> 
+                    <span className="font-bold">{formatMoney(results.variableCosts)}</span>
                   </div>
-                  <div className="flex justify-between py-2 border-b border-[#FFF8E1]">
-                    <span className="text-[#8D6E63] flex items-center gap-1">Mão de Obra</span>
-                    <span className="font-bold text-[#5D4037]">{formatMoney(results.laborCost)}</span>
+                  <div className="flex justify-between text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                    <span>Mão de Obra (Salário):</span> 
+                    <span className="font-bold">{formatMoney(results.laborCost)}</span>
                   </div>
-                  <div className="flex justify-between py-3">
-                    <span className="font-bold text-[#5D4037]">Custo Total</span>
-                    <span className="font-bold text-[#3E2723]">{formatMoney(results.totalProductionCost)}</span>
+                  <div className="flex justify-between pt-2 border-t font-bold text-gray-800 text-base">
+                    <span>Custo de Produção:</span> 
+                    <span>{formatMoney(results.totalProductionCost)}</span>
                   </div>
-                   <div className="flex justify-between py-2 px-3 bg-[#E8F5E9] rounded-xl text-[#2E7D32]">
-                    <span className="font-bold">Seu Lucro</span>
-                    <span className="font-bold">+{formatMoney(results.profitValue)}</span>
+                  <div className="flex justify-between text-green-600 font-bold bg-green-50 px-2 py-1 rounded">
+                    <span>Lucro Líquido:</span> 
+                    <span>+{formatMoney(results.profitValue)}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="relative group cursor-default">
-                <div className="absolute -inset-1 bg-gradient-to-r from-[#BF360C] to-[#E65100] rounded-[30px] blur opacity-30 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
-                <div className="relative candy-card p-8 bg-gradient-to-br from-white to-[#FFF3E0] text-center border-white/50">
-                  <p className="text-[#FF7043] text-xs font-bold uppercase tracking-widest mb-2">Preço de Venda Sugerido</p>
-                  <div className="text-5xl font-pacifico text-[#BF360C] mb-2 drop-shadow-sm">
-                    {formatMoney(results.pricePerUnit)}
-                  </div>
-                  <p className="text-[#8D6E63] text-sm">por unidade</p>
-                  
-                  <div className="mt-6 pt-6 border-t border-[#FFE0B2]">
-                    <p className="text-[#8D6E63] text-sm">Faturamento da receita</p>
-                    <p className="text-xl font-bold text-[#E65100]">{formatMoney(results.totalSalePrice)}</p>
-                  </div>
+              <div className="bg-gradient-to-br from-pink-500 to-purple-600 rounded-3xl shadow-xl p-8 text-white text-center transform transition-transform hover:scale-[1.02]">
+                <p className="text-xs font-bold uppercase opacity-80 mb-1 tracking-widest">Preço Sugerido de Venda</p>
+                <div className="text-5xl font-extrabold mb-2">{formatMoney(results.pricePerUnit)}</div>
+                <p className="text-sm opacity-90">por unidade</p>
+                
+                <div className="mt-6 pt-4 border-t border-white/20 flex justify-between text-xs opacity-70">
+                    <span>Faturamento Total:</span>
+                    <span>{formatMoney(results.totalSalePrice)}</span>
                 </div>
               </div>
-
             </div>
           </div>
         )}
-        
-        {/* TAB: RECEITAS SALVAS */}
+
         {activeTab === 'savedRecipes' && (
-          <div className="animate-fade-in space-y-6">
-            <h2 className="text-2xl font-bold text-[#5D4037] mb-6 flex items-center gap-2">
-              <List className="text-green-600" /> Minhas Receitas Salvas
-            </h2>
-            
-            {savedRecipes.length === 0 ? (
-              <div className="candy-card p-12 text-center bg-[#FAFAFA] border-dashed border-[#FFE0B2] text-[#8D6E63]">
-                <Save size={48} className="mx-auto mb-4 text-[#FFCC80] opacity-70" />
-                <p className="font-bold text-lg">Nenhuma receita salva ainda!</p>
-                <p>Vá para a Calculadora, preencha sua receita e clique em "Salvar Receita".</p>
-              </div>
-            ) : (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {savedRecipes.map((r: any) => (
-                  <div key={r.id} className="candy-card p-5 bg-white border border-green-100 shadow-md">
-                    <h3 className="font-pacifico text-2xl text-[#BF360C] mb-1">{r.name}</h3>
-                    <p className="text-xs text-[#8D6E63] mb-4">Salva em: {r.savedAt}</p>
-                    
-                    <div className="space-y-1 text-sm border-t border-[#FFF3E0] pt-3">
-                        <div className="flex justify-between text-[#3E2723]">
-                            <span className="font-bold">Rendimento:</span>
-                            <span>{r.yields} unidades</span>
-                        </div>
-                        <div className="flex justify-between text-[#8D6E63]">
-                            <span>Tempo de preparo:</span>
-                            <span>{r.timeSpentMinutes} min</span>
-                        </div>
-                        <div className="flex justify-between text-[#8D6E63]">
-                            <span>Lucro Desejado:</span>
-                            <span>{r.profitMargin}%</span>
-                        </div>
-                        <div className="flex justify-between text-green-600 font-bold pt-2 border-t border-[#FFE0B2]">
-                            <span>Valor da Hora (No salvamento):</span>
-                            <span>{formatMoney(parseFloat(r.hourlyRate))}</span>
-                        </div>
+          <div className="animate-fade-in">
+             <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><List className="text-pink-500"/> Minhas Receitas</h2>
+             <div className="grid md:grid-cols-2 gap-4">
+                {savedRecipes.length === 0 && <div className="col-span-2 text-center py-12 bg-white rounded-xl border border-dashed border-gray-300 text-gray-400"><Package size={48} className="mx-auto mb-2 opacity-20"/><p>Você ainda não salvou nenhuma receita.</p></div>}
+                {savedRecipes.map((r) => (
+                <div key={r.id} className="bg-white p-5 rounded-xl border border-pink-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex justify-between items-start mb-2">
+                        <h3 className="font-bold text-lg text-pink-600">{r.name}</h3>
+                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-lg">{r.savedAt}</span>
                     </div>
-                    
-                    <div className="mt-4 flex gap-3">
-                        <button
-                            onClick={() => handleLoadRecipe(r.id)}
-                            className="flex-1 bg-green-500 text-white p-2 rounded-lg text-sm font-bold hover:bg-green-600 transition-colors"
-                        >
-                            Carregar
-                        </button>
-                        <button
-                            onClick={() => handleDeleteRecipe(r.id, r.name)}
-                            className="bg-red-400 text-white p-2 rounded-lg text-sm hover:bg-red-500 transition-colors"
-                        >
-                            <Trash2 size={18} />
-                        </button>
+                    <div className="text-sm text-gray-600 mb-4 flex gap-4">
+                        <span>📦 {r.yields} un</span>
+                        <span>⏱️ {r.timeSpentMinutes} min</span>
+                        <span>💰 {r.profitMargin}%</span>
                     </div>
-                  </div>
+                    <div className="flex gap-2">
+                    <button onClick={() => handleLoadRecipe(r.id)} className="flex-1 bg-blue-50 text-blue-600 py-2 rounded-lg font-bold hover:bg-blue-100 transition-colors">Abrir na Calculadora</button>
+                    <button onClick={() => handleDeleteRecipe(r.id)} className="px-3 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition-colors">
+                        <Trash2 size={18} />
+                    </button>
+                    </div>
+                </div>
                 ))}
-              </div>
-            )}
-            
+            </div>
           </div>
         )}
       </main>
