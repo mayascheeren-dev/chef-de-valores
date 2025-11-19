@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calculator, Settings, Plus, Trash2, Package, Clock, ChefHat, Sparkles, Share2, Lightbulb, Type, TrendingUp, Lock, Save, List } from 'lucide-react';
+import { Calculator, Settings, Plus, Trash2, Package, Clock, ChefHat, List, TrendingUp, Lock, Save } from 'lucide-react';
 
 // --- CONFIGURAÇÃO DE SEGURANÇA ---
 const ACCESS_PASSWORD = "DOCE2025"; 
@@ -177,77 +177,6 @@ const App = () => {
 
   const results = calculateRecipeCosts();
 
-  // --- INTEGRAÇÃO COM GEMINI API ---
-  const callGemini = async (promptType: string) => {
-    setIsAiLoading(true);
-    setAiError(null);
-    setAiResult('');
-
-    const apiKey = ""; // Chave injetada pelo ambiente
-    const model = "gemini-2.5-flash-preview-09-2025";
-    
-    // CORREÇÃO FINAL: Esta é a forma mais robusta de acessar a variável de ambiente (Vercel)
-    // Usamos 'VITE_GEMINI_API_KEY' (Vite) ou 'GEMINI_API_KEY' (Vercel Node)
-    const envApiKey = (process.env.VITE_GEMINI_API_KEY as string) || (process.env.GEMINI_API_KEY as string) || apiKey; 
-    
-    const ingredientsList = recipe.selectedIngredients
-      .map((item: any) => ingredients.find(i => i.id === item.id)?.name)
-      .join(', ');
-    
-    const price = formatMoney(results.pricePerUnit);
-
-    let systemInstruction = "Você é um assistente especialista em marketing para confeitaria artesanal. Use tom doce, acolhedor e muitos emojis. Responda em Português do Brasil.";
-    let userPrompt = "";
-
-    if (promptType === 'caption') {
-      userPrompt = `Crie uma legenda curta e irresistível para Instagram vendendo "${recipe.name}". 
-      Ingredientes: ${ingredientsList}. 
-      Preço: ${price}. 
-      Foque no sabor e na exclusividade.`;
-    } else if (promptType === 'sales') {
-      userPrompt = `Me dê 3 ideias criativas e rápidas para vender mais "${recipe.name}" ainda hoje.`;
-    } else if (promptType === 'names') {
-      userPrompt = `O nome atual é "${recipe.name}". Crie 5 nomes 'Gourmet' e sofisticados para valorizar esse doce.`;
-    }
-
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${envApiKey}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: userPrompt }] }],
-            systemInstruction: { parts: [{ text: systemInstruction }] } 
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Erro na conexão com a IA');
-      }
-      
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      
-      if (text) {
-        setAiResult(text);
-      } else {
-        throw new Error('Nenhuma resposta gerada.');
-      }
-
-    } catch (error) {
-      // Corrigindo o erro de tipagem no setError
-      setAiError("Ops! A confeiteira virtual está ocupada. Tente de novo em alguns segundos! 🧁" as any); 
-      console.error(error);
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
   // --- FUNÇÕES DE UTILIDADE ---
   const formatMoney = (value: number) => {
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -261,7 +190,7 @@ const App = () => {
         id: Date.now(), 
         packageWeight: parseFloat(newIngredient.packageWeight as any), 
         cost: parseFloat(newIngredient.cost as any) 
-      }]);
+      }]); // Corrigido: fechando com ']'
       setNewIngredient({ name: '', packageWeight: '', cost: '' });
     }
   };
@@ -413,7 +342,7 @@ const App = () => {
             { id: 'ingredients', label: 'Despensa', icon: Package, color: 'text-orange-600' },
             { id: 'calculator', label: 'Calculadora', icon: Calculator, color: 'text-[#BF360C]' },
             { id: 'savedRecipes', label: 'Receitas Salvas', icon: List, color: 'text-green-600' },
-            { id: 'marketing', label: 'Marketing IA', icon: Sparkles, color: 'text-purple-600' },
+            // Removida aba 'marketing'
           ].map((tab) => (
             <button
               key={tab.id}
@@ -812,7 +741,7 @@ const App = () => {
                         </div>
                         <div className="flex justify-between text-green-600 font-bold pt-2 border-t border-[#FFE0B2]">
                             <span>Valor da Hora (No salvamento):</span>
-                            <span>{formatMoney(r.hourlyRate)}</span>
+                            <span>{formatMoney(parseFloat(r.hourlyRate))}</span>
                         </div>
                     </div>
                     
@@ -837,100 +766,12 @@ const App = () => {
             
           </div>
         )}
-
-        {/* TAB: MARKETING COM IA */}
-        {activeTab === 'marketing' && (
-          <div className="grid md:grid-cols-3 gap-8 items-start">
-            
-            <div className="space-y-4">
-              <div className="candy-card p-6 bg-gradient-to-br from-[#5E35B1] to-[#4527A0] text-white border-none shadow-xl">
-                <h2 className="text-2xl font-pacifico mb-4 flex items-center gap-2">
-                  <Sparkles className="text-[#FFD740] animate-pulse" /> Assistente Mágica
-                </h2>
-                <p className="text-[#D1C4E9] text-sm mb-8 leading-relaxed opacity-90">
-                  Eu uso Inteligência Artificial para criar textos que dão água na boca. Escolha o que você precisa para vender seu <strong>{recipe.name}</strong>:
-                </p>
-                
-                <div className="space-y-3">
-                  {[
-                    { id: 'caption', label: 'Legenda Instagram', desc: 'Texto para foto', icon: Share2, bg: 'bg-[#AB47BC]' },
-                    { id: 'sales', label: 'Dicas de Venda', desc: 'Estratégia Rápida', icon: Lightbulb, bg: 'bg-[#FBC02D]' },
-                    { id: 'names', label: 'Nomes Gourmet', desc: 'Ideias Chiques', icon: Type, bg: 'bg-[#42A5F5]' },
-                  ].map((btn) => (
-                    <button 
-                      key={btn.id}
-                      onClick={() => callGemini(btn.id)}
-                      disabled={isAiLoading}
-                      className="w-full bg-white/10 hover:bg-white/20 border border-white/10 p-4 rounded-2xl flex items-center gap-4 transition-all disabled:opacity-50 text-left group"
-                    >
-                      <div className={`${btn.bg} p-3 rounded-xl shadow-lg group-hover:scale-110 transition-transform text-white`}>
-                        <btn.icon size={20} />
-                      </div>
-                      <div>
-                        <p className="font-bold text-white">{btn.label}</p>
-                        <p className="text-xs text-[#EDE7F6]">{btn.desc}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="md:col-span-2 h-full">
-              <div className="candy-card p-8 h-full flex flex-col min-h-[500px] relative bg-white">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-bold text-xl text-[#5D4037] flex items-center gap-2">
-                    {isAiLoading ? '✨ Preparando a mágica...' : '📝 Resultado'}
-                  </h3>
-                  <div className="flex gap-1">
-                    <div className="w-3 h-3 rounded-full bg-[#FFAB91]"></div>
-                    <div className="w-3 h-3 rounded-full bg-[#FFF59D]"></div>
-                    <div className="w-3 h-3 rounded-full bg-[#A5D6A7]"></div>
-                  </div>
-                </div>
-                
-                <div className="flex-1 bg-[#FAFAFA] rounded-xl p-8 border-2 border-dashed border-[#E0E0E0] relative overflow-hidden">
-                  {isAiLoading ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-[#BDBDBD] gap-4">
-                       <div className="w-12 h-12 border-4 border-[#B39DDB] border-t-[#673AB7] rounded-full animate-spin"></div>
-                       <p className="font-nunito animate-pulse">Misturando as palavras...</p>
-                    </div>
-                  ) : aiResult ? (
-                    <div className="prose prose-orange text-[#616161] whitespace-pre-wrap font-nunito text-lg leading-relaxed">
-                      {aiResult}
-                    </div>
-                  ) : aiError ? (
-                    <div className="text-center py-20 text-[#E57373]">
-                      <p>{aiError}</p>
-                    </div>
-                  ) : (
-                    <div className="text-center text-[#BDBDBD] py-20 flex flex-col items-center">
-                      <Sparkles size={64} className="mb-6 opacity-20" />
-                      <p className="text-lg font-bold">Sua lousa mágica está vazia</p>
-                      <p className="text-sm">Clique em um dos botões ao lado para começar.</p>
-                    </div>
-                  )}
-                </div>
-
-                {aiResult && (
-                  <div className="mt-6 flex justify-end">
-                     <button 
-                      onClick={() => {navigator.clipboard.writeText(aiResult); alert('Copiado com sucesso! 🧁');}}
-                      className="btn-primary px-6 py-3 rounded-full text-white font-bold text-sm transition-transform hover:scale-105 flex items-center gap-2"
-                     >
-                       Copiar Texto
-                     </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-          </div>
-        )}
-
+        
+        {/* OBS: A aba MARKETING FOI REMOVIDA */}
       </main>
     </div>
   );
 };
 
 export default App;
+                    
