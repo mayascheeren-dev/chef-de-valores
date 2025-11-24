@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
-// --- CORREÇÃO: TODOS OS ÍCONES IMPORTADOS AQUI ---
 import { 
   Calculator, Settings, Plus, Trash2, Package, Clock, ChefHat, 
   Sparkles, ShoppingCart, Calendar, TrendingUp, LogOut, Copy, Check, Menu, X, 
-  Save, Edit, Users, Cake, Phone, User, AlertCircle, ChevronRight
+  Save, Edit, Users, Cake, Phone, User, DollarSign, AlertCircle, ChevronRight
 } from 'lucide-react';
 
 // --- 🔒 CONFIGURAÇÃO DO FIREBASE ---
@@ -19,7 +18,6 @@ const firebaseConfig = {
   measurementId: "G-JR8Z43E95X"
 };
 
-// Inicializa Firebase de forma segura
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
@@ -30,7 +28,7 @@ interface Recipe { id: number; name: string; yields: number; time: number; profi
 interface Client { id: number; name: string; phone: string; birthday: string; }
 interface Order { 
   id: number; clientId: number; clientName: string; deliveryDate: string; 
-  items: string; value: number; paymentMethod: string; status: 'pendente' | 'pago' | 'entregue'; 
+  items: string; value: number; paymentMethod: string; status: string; 
 }
 interface CompanyProfile { businessName: string; chefName: string; cnpj: string; }
 interface ShoppingItem { type: 'recipe' | 'ingredient'; id: number; count: number; }
@@ -53,7 +51,7 @@ const App = () => {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [loginError, setLoginError] = useState('');
   
-  // --- PERSISTÊNCIA (LOCAL STORAGE) ---
+  // --- PERSISTÊNCIA ---
   const [config, setConfig] = useState(() => JSON.parse(localStorage.getItem('cv_config') || '{"salary":3000,"costs":800,"hours":8,"days":5}'));
   const [dbIngredients, setDbIngredients] = useState<Ingredient[]>(() => JSON.parse(localStorage.getItem('cv_ingredients') || JSON.stringify(initialIngredients)));
   const [recipes, setRecipes] = useState<Recipe[]>(() => JSON.parse(localStorage.getItem('cv_recipes') || '[]'));
@@ -112,7 +110,7 @@ const App = () => {
     return { totalCost, finalPrice, unitPrice: finalPrice / (rec.yields || 1) };
   };
 
-  // Cálculo Inteligente da Lista de Compras
+  // Lista de Compras Inteligente
   const shoppingStats = useMemo(() => {
     const totals: Record<string, {qty: number, cost: number, unit: string}> = {};
     let totalCost = 0;
@@ -135,7 +133,7 @@ const App = () => {
         } else {
           const dbIng = dbIngredients.find(d => d.id === item.id);
           if (dbIng) {
-            const q = dbIng.packageWeight * item.count; // 1 unidade = 1 pacote
+            const q = dbIng.packageWeight * item.count;
             const c = dbIng.cost * item.count;
             if (!totals[dbIng.name]) totals[dbIng.name] = {qty:0, cost:0, unit: 'g'};
             totals[dbIng.name].qty += q;
@@ -153,12 +151,12 @@ const App = () => {
       e.preventDefault(); 
       setLoginError('');
       try { await signInWithEmailAndPassword(auth, email, password); } 
-      catch (e) { setLoginError("Dados incorretos. Verifique e-mail e senha."); } 
+      catch (e) { setLoginError("Dados incorretos."); } 
   };
 
   const handleDeleteIngredient = (id: number) => {
       const isUsed = recipes.some(r => r.ingredients.some(i => i.id === id));
-      if(isUsed && !window.confirm("Este ingrediente é usado em receitas. Continuar?")) return;
+      if(isUsed && !window.confirm("Ingrediente em uso. Continuar?")) return;
       if(!isUsed && !window.confirm("Apagar ingrediente?")) return;
       setDbIngredients(dbIngredients.filter(i => i.id !== id));
   };
@@ -366,15 +364,15 @@ const App = () => {
                 </div>
             )}
 
-            {/* CALCULADORA & RECEITAS */}
+            {/* CALCULADORA & RECEITAS (COM LISTA ABAIXO) */}
             {view === 'calculator' && (
                 <div className="space-y-8 animate-fade-in">
                     {/* Formulário */}
                     <div className="grid lg:grid-cols-2 gap-8">
                          <div className="bg-white p-6 rounded-3xl shadow-sm border border-[#E8DED5] space-y-4">
                             <div className="flex justify-between items-center mb-2">
-                                <h2 className="text-xl font-bold text-[#4A3630] flex items-center gap-2"><Calculator className="text-[#C58945]"/> {activeRecipe || isEditingRecipe ? 'Editar Receita' : 'Nova Precificação'}</h2>
-                                {(activeRecipe || isEditingRecipe) && <button onClick={() => { setActiveRecipe(null); setIsEditingRecipe(false); setCurrentRecipe({ id: 0, name: '', yields: 1, time: 60, profit: 30, ingredients: [] }); }} className="text-xs text-[#8D6E63] border px-2 py-1 rounded hover:bg-gray-50">Cancelar Edição</button>}
+                                <h2 className="text-xl font-bold text-[#4A3630] flex items-center gap-2"><Calculator className="text-[#C58945]"/> {isEditingRecipe ? 'Editar Receita' : 'Nova Precificação'}</h2>
+                                {isEditingRecipe && <button onClick={() => { setIsEditingRecipe(false); setCurrentRecipe({ id: 0, name: '', yields: 1, time: 60, profit: 30, ingredients: [] }); }} className="text-xs text-[#8D6E63] border px-2 py-1 rounded hover:bg-gray-50">Cancelar Edição</button>}
                             </div>
                             <div><label className="text-xs font-bold text-[#8D6E63]">NOME DA RECEITA</label><input value={currentRecipe.name} onChange={e => setCurrentRecipe({...currentRecipe, name: e.target.value})} className="w-full p-3 bg-[#FAFAFA] border border-[#E8DED5] rounded-xl font-bold text-[#4A3630]" placeholder="Ex: Bolo de Cenoura"/></div>
                             <div className="grid grid-cols-2 gap-4">
@@ -423,7 +421,7 @@ const App = () => {
                                 <div className="flex justify-between mb-2"><span className="font-bold text-[#4A3630]">Margem de Lucro</span><span className="font-bold text-[#C58945]">{currentRecipe.profit}%</span></div>
                                 <input type="range" min="0" max="300" value={currentRecipe.profit} onChange={e => setCurrentRecipe({...currentRecipe, profit: Number(e.target.value)})} className="w-full accent-[#C58945]"/>
                                 <button onClick={handleSaveRecipe} className="w-full mt-6 bg-[#C58945] text-white p-4 rounded-xl font-bold hover:bg-[#B0783A] transition-colors flex items-center justify-center gap-2 shadow-md">
-                                    <Save size={20}/> {isEditingRecipe ? 'Atualizar' : 'Salvar na Biblioteca'}
+                                    <Save size={20}/> {isEditingRecipe ? 'Atualizar Receita' : 'Salvar na Biblioteca'}
                                 </button>
                             </div>
                         </div>
@@ -457,7 +455,7 @@ const App = () => {
                 </div>
             )}
 
-            {/* --- DESPENSA --- */}
+            {/* --- DESPENSA (COM EXCLUSÃO) --- */}
             {view === 'ingredients' && (
                 <div className="space-y-6 animate-fade-in">
                     <h2 className="text-2xl font-serif font-bold text-[#4A3630]">Minha Despensa</h2>
@@ -481,7 +479,7 @@ const App = () => {
                 </div>
             )}
 
-            {/* --- LISTA DE COMPRAS --- */}
+            {/* --- LISTA DE COMPRAS INTELIGENTE --- */}
             {view === 'shopping' && (
                 <div className="animate-fade-in grid lg:grid-cols-2 gap-8">
                     <div className="space-y-6">
